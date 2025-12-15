@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Lector de Códigos + Carga Excel (sin DB)</title>
+  <style>
+    body{font-family:system-ui,Segoe UI,Arial;margin:18px;background:#f6f7fb;color:#222}
+    .card{background:#fff;border:1px solid #e6e8ef;border-radius:14px;padding:14px;margin-bottom:12px;box-shadow:0 6px 18px rgba(0,0,0,.04)}
+    h1{font-size:18px;margin:0 0 10px}
+    h2{font-size:14px;margin:0 0 10px;color:#444}
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    input,button{padding:10px 12px;border-radius:12px;border:1px solid #d9dbe6}
+    input{flex:1;min-width:240px}
+    button{cursor:pointer;background:#111827;color:#fff;border:0}
+    button.secondary{background:#6b7280}
+    button.danger{background:#dc2626}
+    table{width:100%;border-collapse:collapse}
+    th,td{font-size:13px;text-align:left;padding:8px;border-bottom:1px solid #eee}
+    .muted{color:#6b7280;font-size:12px}
+    .pill{display:inline-block;padding:4px 10px;border-radius:999px;background:#eef2ff;color:#3730a3;font-size:12px}
+    .right{margin-left:auto}
+    .total{font-weight:800;font-size:18px}
+    .ok{color:#065f46}
+    .bad{color:#991b1b}
+    .mono{font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace}
+  </style>
+
+  <!-- SheetJS para leer Excel (XLSX). Funciona por CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+
+  <div class="card">
+    <h1>📦 Lector de códigos + Carga de productos desde Excel</h1>
+    <div class="muted">
+      1) Carga tu Excel → 2) Enfoca el campo “Escanear” → 3) Escanea (la pistola escribe y manda Enter).
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>1) Cargar productos desde Excel</h2>
+    <div class="row">
+      <input id="file" type="file" accept=".xlsx,.xls,.csv" />
+      <button id="btnImport">Importar Excel</button>
+      <button id="btnExport" class="secondary">Exportar productos (CSV)</button>
+      <button id="btnClear" class="danger right">Borrar catálogo</button>
+    </div>
+    <div class="muted" style="margin-top:10px">
+      Encabezados esperados: <span class="pill">CODIGO</span> <span class="pill">PRODUCTO</span> <span class="pill">PRECIO</span> <span class="pill">STOCK (opcional)</span>
+      — (no importa mayúsculas/minúsculas).
+    </div>
+    <div id="importMsg" class="muted" style="margin-top:10px"></div>
+  </div>
+
+  <div class="card">
+    <h2>2) Escanear</h2>
+    <div class="row">
+      <input id="scan" placeholder="Escanear aquí (Enter agrega)" autofocus />
+      <input id="qty" type="number" min="1" value="1" style="max-width:120px" />
+      <button id="btnAdd">Agregar</button>
+    </div>
+    <div id="scanMsg" class="muted" style="margin-top:10px"></div>
+  </div>
+
+  <div class="card">
+    <h2>Carrito</h2>
+    <table id="cartTable">
+      <thead>
+        <tr>
+          <th>Código</th>
+          <th>Producto</th>
+          <th>Precio</th>
+          <th>Cant.</th>
+          <th>Total</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+
+    <div class="row" style="margin-top:10px">
+      <div class="right total">TOTAL: <span id="grandTotal">Q0.00</span></div>
+      <button id="btnEmpty" class="secondary">Vaciar carrito</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Catálogo (vista rápida)</h2>
+    <div class="muted">Productos cargados: <b id="count">0</b></div>
+    <div class="muted" style="margin-top:8px">
+      Tip: si el escaneo “no hace nada”, revisa si tu pistola manda <span class="mono">ENTER</span> al final (casi todas lo hacen).
+    </div>
+  </div>
+
+<script>
+/* =========================
+   Storage / Estado
+========================= */
+const LS_KEY = "CATALOGO_PRODUCTOS_V1";
+let catalog = loadCatalog(); // Map por codigo
+let cart = []; // [{code, name, price, qty}]
+
+function loadCatalog(){
+  const raw = localStorage.getItem(LS_KEY);
+  if (!raw) return new Map();
+  try{
+    const arr = JSON.parse(raw); // [{code,name,price,stock}]
+    return new Map(arr.map(p => [String(p.code), p]));
+  }catch{
+    return new Map();
+  }
+}
+function saveCatalog(){
+  const arr = Array.from(catalog.values());
+  localStorage.setItem(LS_KEY, JSON.stringify(arr));
+  updateCount();
+}
+function updateCount(){
+  document.getElementById("count").textContent = String(catalog.size);
+}
+updateCount();
+
+function money(n){
+  return "Q" + (Number(n)||0).toFixed(2);
+}
+
+/* =========================
+   Importar Excel
+========================= */
+function normalizeKey(k){
+  return String(k||"").trim().toUpperCase();
+}
+
+function parseRowsToCatalog(rows){
+  // rows: objetos con keys variadas
+  // esperados: CODIGO / PRODUCTO / PRECIO / STOCK
+  let added = 0, updated = 0, skipped = 0;
+
+  for (const r of rows){
+    // Encontrar campos aunque vengan como "Codigo", "código", etc.
+    const keys = Object.keys(r||{});
+    const byNorm = new Map(keys.map(k => [normalizeKey(k), k]));
+
+    const kCode  = byNorm.get("CODIGO") || byNorm.get("CÓDIGO") || byNorm.get("BARCODE") || byNorm.get("SKU");
+    const kName  = byNorm.get("PRODUCTO") || byNorm.get("NOMBRE") || byNorm.get("DESCRIPCION") || byNorm.get("DESCRIPCIÓN");
+    const kPrice = byNorm.get("PRECIO") || byNorm.get("PRICE") || byNorm.get("PVP");
+    const kStock = byNorm.get("STOCK") || byNorm.get("EXISTENCIA") || byNorm.get("CANTIDAD");
+
+    const code = kCode ? String(r[kCode]).trim() : "";
+    const name = kName ? String(r[kName]).trim() : "";
+    const price = kPrice ? Number(r[kPrice]) : NaN;
+    const stock = kStock ? Number(r[kStock]) : null;
+
+    if (!code || !name || !Number.isFinite(price)){
+      skipped++;
+      continue;
+    }
+
+    const existing = catalog.get(code);
+    const item = { code, name, price, stock: Number.isFinite(stock) ? stock : null };
+
+    if (existing){
+      catalog.set(code, item);
+      updated++;
+    }else{
+      catalog.set(code, item);
+      added++;
+    }
+  }
+
+  saveCatalog();
+  return {added, updated, skipped};
+}
+
+document.getElementById("btnImport").addEventListener("click", async () => {
+  const fileInput = document.getElementById("file");
+  const msg = document.getElementById("importMsg");
+  msg.textContent = "";
+
+  if (!fileInput.files || !fileInput.files[0]){
+    msg.innerHTML = `<span class="bad">Selecciona un archivo Excel primero.</span>`;
+    return;
+  }
+
+  const file = fileInput.files[0];
+  const data = await file.arrayBuffer();
+
+  try{
+    const wb = XLSX.read(data, { type: "array" });
+    const sheetName = wb.SheetNames[0];
+    const ws = wb.Sheets[sheetName];
+    const rows = XLSX.utils.sheet_to_json(ws, { defval: "" });
+
+    const r = parseRowsToCatalog(rows);
+    msg.innerHTML = `<span class="ok">Importado.</span> Agregados: <b>${r.added}</b>, Actualizados: <b>${r.updated}</b>, Omitidos: <b>${r.skipped}</b>.`;
+  }catch(e){
+    msg.innerHTML = `<span class="bad">Error leyendo Excel:</span> ${e.message || e}`;
+  }
+});
+
+/* =========================
+   Exportar CSV
+========================= */
+document.getElementById("btnExport").addEventListener("click", () => {
+  const arr = Array.from(catalog.values());
+  const header = ["CODIGO","PRODUCTO","PRECIO","STOCK"];
+  const lines = [header.join(",")];
+
+  for (const p of arr){
+    const line = [
+      `"${String(p.code).replaceAll('"','""')}"`,
+      `"${String(p.name).replaceAll('"','""')}"`,
+      String(p.price),
+      p.stock == null ? "" : String(p.stock)
+    ].join(",");
+    lines.push(line);
+  }
+
+  const blob = new Blob([lines.join("\n")], {type:"text/csv;charset=utf-8"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "productos.csv";
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+
+/* =========================
+   Borrar catálogo
+========================= */
+document.getElementById("btnClear").addEventListener("click", () => {
+  if (!confirm("¿Seguro que deseas borrar el catálogo guardado en este navegador?")) return;
+  localStorage.removeItem(LS_KEY);
+  catalog = new Map();
+  updateCount();
+  document.getElementById("importMsg").innerHTML = `<span class="ok">Catálogo borrado.</span>`;
+});
+
+/* =========================
+   Escaneo / Carrito
+========================= */
+function addToCart(code, qty){
+  const scanMsg = document.getElementById("scanMsg");
+  const p = catalog.get(code);
+
+  if (!p){
+    scanMsg.innerHTML = `<span class="bad">No existe:</span> <span class="mono">${code}</span> (carga el Excel o agrega ese producto).`;
+    return;
+  }
+
+  qty = Math.max(1, Number(qty||1));
+  const existing = cart.find(x => x.code === code);
+  if (existing) existing.qty += qty;
+  else cart.push({ code, name: p.name, price: p.price, qty });
+
+  scanMsg.innerHTML = `<span class="ok">Agregado:</span> ${p.name} x${qty}`;
+  renderCart();
+}
+
+function renderCart(){
+  const tbody = document.querySelector("#cartTable tbody");
+  tbody.innerHTML = "";
+
+  let total = 0;
+  for (const it of cart){
+    const lineTotal = it.price * it.qty;
+    total += lineTotal;
+
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td class="mono">${it.code}</td>
+      <td>${it.name}</td>
+      <td>${money(it.price)}</td>
+      <td>${it.qty}</td>
+      <td><b>${money(lineTotal)}</b></td>
+      <td><button class="secondary" data-del="${it.code}">Quitar</button></td>
+    `;
+    tbody.appendChild(tr);
+  }
+
+  document.getElementById("grandTotal").textContent = money(total);
+
+  tbody.querySelectorAll("button[data-del]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const code = btn.getAttribute("data-del");
+      cart = cart.filter(x => x.code !== code);
+      renderCart();
+    });
+  });
+}
+
+document.getElementById("btnEmpty").addEventListener("click", () => {
+  cart = [];
+  renderCart();
+});
+
+document.getElementById("btnAdd").addEventListener("click", () => {
+  const code = document.getElementById("scan").value.trim();
+  if (!code) return;
+  addToCart(code, document.getElementById("qty").value);
+  document.getElementById("scan").value = "";
+  document.getElementById("scan").focus();
+});
+
+// Pistola lectora: normalmente manda Enter
+document.getElementById("scan").addEventListener("keydown", (e) => {
+  if (e.key === "Enter"){
+    e.preventDefault();
+    const code = e.target.value.trim();
+    if (!code) return;
+    addToCart(code, document.getElementById("qty").value);
+    e.target.value = "";
+  }
+});
+</script>
+
+</body>
+</html>

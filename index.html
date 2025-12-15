@@ -3,142 +3,408 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Lector de Códigos + Carga Excel (sin DB)</title>
+  <title>POS Tienda (V2) — Excel + Stock + Ventas (sin DB)</title>
+
   <style>
-    body{font-family:system-ui,Segoe UI,Arial;margin:18px;background:#f6f7fb;color:#222}
-    .card{background:#fff;border:1px solid #e6e8ef;border-radius:14px;padding:14px;margin-bottom:12px;box-shadow:0 6px 18px rgba(0,0,0,.04)}
-    h1{font-size:18px;margin:0 0 10px}
-    h2{font-size:14px;margin:0 0 10px;color:#444}
-    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-    input,button{padding:10px 12px;border-radius:12px;border:1px solid #d9dbe6}
-    input{flex:1;min-width:240px}
-    button{cursor:pointer;background:#111827;color:#fff;border:0}
-    button.secondary{background:#6b7280}
-    button.danger{background:#dc2626}
-    table{width:100%;border-collapse:collapse}
-    th,td{font-size:13px;text-align:left;padding:8px;border-bottom:1px solid #eee}
-    .muted{color:#6b7280;font-size:12px}
-    .pill{display:inline-block;padding:4px 10px;border-radius:999px;background:#eef2ff;color:#3730a3;font-size:12px}
-    .right{margin-left:auto}
-    .total{font-weight:800;font-size:18px}
-    .ok{color:#065f46}
-    .bad{color:#991b1b}
-    .mono{font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace}
+    :root{
+      --bg:#f8f6f4;
+      --panel:#ffffff;
+      --text:#2b2b2b;
+      --muted:#8b8b8b;
+      --line:#ece7e3;
+      --accent:#d63384;
+      --accentSoft:#f3d3e2;
+      --ok:#1f7a4a;
+      --bad:#b42318;
+      --warn:#a16207;
+      --shadow:0 10px 30px rgba(0,0,0,.06);
+      --radius:18px;
+    }
+
+    *{ box-sizing:border-box; margin:0; padding:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; }
+    body{ background:var(--bg); color:var(--text); }
+
+    header{
+      position:sticky; top:0; z-index:5;
+      background:rgba(248,246,244,.92);
+      backdrop-filter: blur(10px);
+      border-bottom:1px solid var(--line);
+    }
+    .top{
+      display:flex; gap:12px; align-items:center; justify-content:space-between;
+      padding:16px 18px;
+      max-width:1200px; margin:0 auto;
+    }
+    .brand .title{ font-size:20px; font-weight:900; letter-spacing:.3px; }
+    .brand .sub{ font-size:12px; color:var(--muted); margin-top:3px; }
+
+    main{ max-width:1200px; margin:0 auto; padding:18px; }
+    .grid{
+      display:grid;
+      grid-template-columns: 1.15fr 1fr;
+      gap:14px;
+      align-items:start;
+    }
+    @media (max-width: 980px){
+      .grid{ grid-template-columns:1fr; }
+    }
+
+    .card{
+      background:var(--panel);
+      border:1px solid var(--line);
+      border-radius:var(--radius);
+      box-shadow:var(--shadow);
+      padding:16px;
+    }
+
+    h2{
+      font-size:14px;
+      font-weight:900;
+      color:var(--accent);
+      margin-bottom:10px;
+      letter-spacing:.2px;
+    }
+
+    .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin:10px 0; }
+
+    .input, select{
+      width:100%;
+      padding:12px 14px;
+      border-radius:14px;
+      border:1px solid var(--line);
+      background:#fff;
+      outline:none;
+      font-size:14px;
+      color:var(--text);
+    }
+    .input:focus, select:focus{ border-color: var(--accent); }
+    .scan{ font-size:16px; }
+    .qty{ max-width:120px; }
+
+    button{
+      padding:12px 16px;
+      border-radius:14px;
+      border:0;
+      cursor:pointer;
+      font-weight:800;
+      transition:.15s;
+    }
+    .btn{ background:var(--accent); color:#fff; }
+    .btn:hover{ opacity:.92; }
+    .btnSoft{ background:var(--accentSoft); color:var(--accent); }
+    .btnSoft:hover{ filter:saturate(1.1); }
+    .btnGray{ background:#f1f1f1; color:#444; }
+    .btnGray:hover{ background:#ececec; }
+    .btnDanger{ background:#dc2626; color:#fff; }
+    .btnDanger:hover{ opacity:.9; }
+
+    .pill{
+      display:inline-flex; align-items:center; gap:8px;
+      padding:8px 12px;
+      border-radius:999px;
+      border:1px solid var(--line);
+      background:#fff;
+      font-size:12px;
+      color:var(--muted);
+    }
+    .dot{ width:10px; height:10px; border-radius:999px; background:#bbb; }
+    .dot.ok{ background:#22c55e; }
+    .dot.bad{ background:#ef4444; }
+
+    .muted{ color:var(--muted); font-size:12px; line-height:1.4; }
+    .ok{ color:var(--ok); font-weight:800; }
+    .bad{ color:var(--bad); font-weight:800; }
+    .warn{ color:var(--warn); font-weight:800; }
+    .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+
+    .tableWrap{ border:1px solid var(--line); border-radius:14px; overflow:auto; max-height:340px; }
+    table{ width:100%; border-collapse:collapse; min-width:640px; }
+    th,td{ font-size:13px; padding:10px; border-bottom:1px solid #f0eeec; text-align:left; }
+    th{ background:#fbfaf9; position:sticky; top:0; z-index:1; }
+
+    .right{ margin-left:auto; }
+    .totalBox{
+      display:flex; align-items:baseline; gap:10px;
+      background:#fbf1f6;
+      border-radius:16px;
+      padding:12px 14px;
+      border:1px solid #f0d7e4;
+    }
+    .totalLabel{ font-size:12px; color:var(--muted); }
+    .totalValue{ font-size:24px; font-weight:1000; color:var(--accent); }
+
+    .msg{
+      background:#fbfaf9;
+      border:1px solid var(--line);
+      border-radius:14px;
+      padding:12px;
+      font-size:13px;
+      color:#555;
+      white-space:pre-wrap;
+      min-height:46px;
+    }
+
+    .kpi{
+      display:grid; grid-template-columns: repeat(3, 1fr); gap:10px;
+    }
+    .kpi .box{
+      border:1px solid var(--line);
+      border-radius:16px;
+      padding:12px;
+      background:#fff;
+    }
+    .kpi .lbl{ font-size:12px; color:var(--muted); }
+    .kpi .val{ font-size:18px; font-weight:1000; margin-top:4px; color:var(--text); }
+
+    .smallBtns{ display:flex; gap:10px; flex-wrap:wrap; }
+    .divider{ height:1px; background:var(--line); margin:12px 0; }
   </style>
 
-  <!-- SheetJS para leer Excel (XLSX). Funciona por CDN -->
+  <!-- SheetJS (Excel) -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
 
-  <div class="card">
-    <h1>📦 Lector de códigos + Carga de productos desde Excel</h1>
-    <div class="muted">
-      1) Carga tu Excel → 2) Enfoca el campo “Escanear” → 3) Escanea (la pistola escribe y manda Enter).
+<header>
+  <div class="top">
+    <div class="brand">
+      <div class="title">POS Tienda — V2</div>
+      <div class="sub">Excel · Stock real · Ventas · Corte X/Z (sin base de datos)</div>
+    </div>
+    <div class="row" style="margin:0; gap:10px;">
+      <div class="pill" title="Estado del catálogo / almacenamiento local">
+        <span class="dot ok" id="dot"></span>
+        <span id="pillInfo">Listo</span>
+      </div>
+      <div class="pill">
+        Día: <b class="mono" id="businessDay">----</b>
+      </div>
     </div>
   </div>
+</header>
 
-  <div class="card">
-    <h2>1) Cargar productos desde Excel</h2>
-    <div class="row">
-      <input id="file" type="file" accept=".xlsx,.xls,.csv" />
-      <button id="btnImport">Importar Excel</button>
-      <button id="btnExport" class="secondary">Exportar productos (CSV)</button>
-      <button id="btnClear" class="danger right">Borrar catálogo</button>
-    </div>
-    <div class="muted" style="margin-top:10px">
-      Encabezados esperados: <span class="pill">CODIGO</span> <span class="pill">PRODUCTO</span> <span class="pill">PRECIO</span> <span class="pill">STOCK (opcional)</span>
-      — (no importa mayúsculas/minúsculas).
-    </div>
-    <div id="importMsg" class="muted" style="margin-top:10px"></div>
+<main>
+  <div class="grid">
+
+    <!-- ====== IZQUIERDA: CAJA ====== -->
+    <section class="card">
+      <h2>Caja</h2>
+
+      <div class="row">
+        <input id="scan" class="input scan" placeholder="Escanear aquí (Enter agrega)" autofocus />
+        <input id="qty" class="input qty" type="number" min="1" value="1" />
+        <button id="btnAdd" class="btnSoft">Agregar</button>
+      </div>
+
+      <div class="muted" id="scanMsg">
+        Tip: la pistola normalmente escribe el código y manda <span class="mono">ENTER</span>.
+      </div>
+
+      <div class="divider"></div>
+
+      <h2>Carrito</h2>
+      <div class="tableWrap">
+        <table id="cartTable">
+          <thead>
+            <tr>
+              <th>Código</th>
+              <th>Producto</th>
+              <th>Precio</th>
+              <th>Cant.</th>
+              <th>Total</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <div class="row" style="margin-top:12px">
+        <div class="totalBox">
+          <div class="totalLabel">TOTAL</div>
+          <div class="totalValue" id="grandTotal">Q0.00</div>
+        </div>
+        <button id="btnEmpty" class="btnGray right">Vaciar</button>
+      </div>
+
+      <div class="row" style="margin-top:6px">
+        <select id="payMethod" class="input" style="max-width:220px">
+          <option value="EFECTIVO">EFECTIVO</option>
+          <option value="TARJETA">TARJETA</option>
+          <option value="TRANSFERENCIA">TRANSFERENCIA</option>
+        </select>
+        <input id="received" class="input" type="number" step="0.01" placeholder="Recibido (opcional)" />
+        <button id="btnCharge" class="btn">COBRAR</button>
+      </div>
+
+      <div class="msg" id="saleMsg"></div>
+    </section>
+
+    <!-- ====== DERECHA: INVENTARIO + ADMIN ====== -->
+    <section class="card">
+      <h2>Productos</h2>
+
+      <div class="row">
+        <input id="file" class="input" type="file" accept=".xlsx,.xls,.csv" />
+        <button id="btnImport" class="btnSoft">Importar Excel</button>
+      </div>
+
+      <div class="smallBtns">
+        <button id="btnExportProducts" class="btnGray">Exportar Productos (CSV)</button>
+        <button id="btnExportSales" class="btnGray">Exportar Ventas (CSV)</button>
+        <button id="btnClearAll" class="btnDanger">Borrar TODO (catálogo+ventas)</button>
+      </div>
+
+      <div class="muted" style="margin-top:10px">
+        Encabezados recomendados: <b>CODIGO</b>, <b>PRODUCTO</b>, <b>PRECIO</b>, <b>STOCK</b> (opcional: COSTO, CATEGORIA).<br/>
+        Si un producto no tiene STOCK, el sistema lo deja como “sin control de existencias”.
+      </div>
+
+      <div class="msg" id="importMsg" style="margin-top:10px"></div>
+
+      <div class="divider"></div>
+
+      <h2>Resumen del día</h2>
+      <div class="kpi">
+        <div class="box">
+          <div class="lbl">Ventas hoy</div>
+          <div class="val" id="kpiSalesCount">0</div>
+        </div>
+        <div class="box">
+          <div class="lbl">Total hoy</div>
+          <div class="val" id="kpiTotalToday">Q0.00</div>
+        </div>
+        <div class="box">
+          <div class="lbl">Productos</div>
+          <div class="val" id="kpiProducts">0</div>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:12px">
+        <button id="btnCorteX" class="btnSoft">Corte X (ver)</button>
+        <button id="btnCorteZ" class="btn">Corte Z (cerrar día)</button>
+      </div>
+
+      <div class="divider"></div>
+
+      <h2>Inventario (vista rápida)</h2>
+      <div class="row">
+        <input id="search" class="input" placeholder="Buscar por código o nombre..." />
+        <button id="btnClearSearch" class="btnGray">Limpiar</button>
+      </div>
+
+      <div class="tableWrap" style="max-height:320px">
+        <table id="invTable">
+          <thead>
+            <tr>
+              <th>Código</th>
+              <th>Producto</th>
+              <th>Precio</th>
+              <th>Stock</th>
+              <th>Estado</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+
+      <div class="muted" style="margin-top:10px">
+        Consejo: pon un <b>mínimo</b> en la configuración (por defecto 2) para alertas de “stock bajo”.
+      </div>
+
+      <div class="row" style="margin-top:10px">
+        <input id="minStock" class="input" type="number" min="0" value="2" style="max-width:160px" />
+        <div class="muted">Mínimo stock</div>
+      </div>
+    </section>
+
   </div>
-
-  <div class="card">
-    <h2>2) Escanear</h2>
-    <div class="row">
-      <input id="scan" placeholder="Escanear aquí (Enter agrega)" autofocus />
-      <input id="qty" type="number" min="1" value="1" style="max-width:120px" />
-      <button id="btnAdd">Agregar</button>
-    </div>
-    <div id="scanMsg" class="muted" style="margin-top:10px"></div>
-  </div>
-
-  <div class="card">
-    <h2>Carrito</h2>
-    <table id="cartTable">
-      <thead>
-        <tr>
-          <th>Código</th>
-          <th>Producto</th>
-          <th>Precio</th>
-          <th>Cant.</th>
-          <th>Total</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
-
-    <div class="row" style="margin-top:10px">
-      <div class="right total">TOTAL: <span id="grandTotal">Q0.00</span></div>
-      <button id="btnEmpty" class="secondary">Vaciar carrito</button>
-    </div>
-  </div>
-
-  <div class="card">
-    <h2>Catálogo (vista rápida)</h2>
-    <div class="muted">Productos cargados: <b id="count">0</b></div>
-    <div class="muted" style="margin-top:8px">
-      Tip: si el escaneo “no hace nada”, revisa si tu pistola manda <span class="mono">ENTER</span> al final (casi todas lo hacen).
-    </div>
-  </div>
+</main>
 
 <script>
-/* =========================
-   Storage / Estado
-========================= */
-const LS_KEY = "CATALOGO_PRODUCTOS_V1";
-let catalog = loadCatalog(); // Map por codigo
-let cart = []; // [{code, name, price, qty}]
+/* =========================================================
+   POS V2 — SIN DB (localStorage)
+   - Catálogo por código
+   - Stock real (si viene STOCK)
+   - Ventas guardadas
+   - Corte X / Corte Z
+========================================================= */
 
+/* =========================
+   Storage Keys
+========================= */
+const LS_PRODUCTS = "POS_V2_PRODUCTS";
+const LS_SALES    = "POS_V2_SALES";
+const LS_DAY      = "POS_V2_BUSINESS_DAY";
+
+/* =========================
+   Estado
+========================= */
+let catalog = loadCatalog();     // Map(code -> product)
+let sales = loadSales();         // array de ventas
+let cart = [];                   // [{code, qty}]
+let businessDay = loadBusinessDay(); // YYYY-MM-DD
+
+/* =========================
+   Utilidades
+========================= */
+const $ = (id) => document.getElementById(id);
+
+function todayStr(){
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth()+1).padStart(2,"0");
+  const dd = String(d.getDate()).padStart(2,"0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+function money(n){ return "Q" + (Number(n)||0).toFixed(2); }
+function clampInt(n, min=1){ n = Number(n||0); if(!Number.isFinite(n)) n=0; return Math.max(min, Math.floor(n)); }
+
+function setPill(text, ok=true){
+  $("pillInfo").textContent = text;
+  $("dot").className = "dot " + (ok ? "ok" : "bad");
+}
+
+/* =========================
+   Load / Save
+========================= */
 function loadCatalog(){
-  const raw = localStorage.getItem(LS_KEY);
-  if (!raw) return new Map();
+  const raw = localStorage.getItem(LS_PRODUCTS);
+  if(!raw) return new Map();
   try{
-    const arr = JSON.parse(raw); // [{code,name,price,stock}]
+    const arr = JSON.parse(raw); // [{code,name,price,stock,cost,category}]
     return new Map(arr.map(p => [String(p.code), p]));
   }catch{
     return new Map();
   }
 }
 function saveCatalog(){
-  const arr = Array.from(catalog.values());
-  localStorage.setItem(LS_KEY, JSON.stringify(arr));
-  updateCount();
+  localStorage.setItem(LS_PRODUCTS, JSON.stringify(Array.from(catalog.values())));
 }
-function updateCount(){
-  document.getElementById("count").textContent = String(catalog.size);
+function loadSales(){
+  const raw = localStorage.getItem(LS_SALES);
+  if(!raw) return [];
+  try{ return JSON.parse(raw); }catch{ return []; }
 }
-updateCount();
-
-function money(n){
-  return "Q" + (Number(n)||0).toFixed(2);
+function saveSales(){
+  localStorage.setItem(LS_SALES, JSON.stringify(sales));
+}
+function loadBusinessDay(){
+  return localStorage.getItem(LS_DAY) || todayStr();
+}
+function saveBusinessDay(){
+  localStorage.setItem(LS_DAY, businessDay);
 }
 
 /* =========================
-   Importar Excel
+   Import Excel
 ========================= */
-function normalizeKey(k){
-  return String(k||"").trim().toUpperCase();
-}
+function normalizeKey(k){ return String(k||"").trim().toUpperCase(); }
 
 function parseRowsToCatalog(rows){
-  // rows: objetos con keys variadas
-  // esperados: CODIGO / PRODUCTO / PRECIO / STOCK
-  let added = 0, updated = 0, skipped = 0;
+  let added=0, updated=0, skipped=0;
 
-  for (const r of rows){
-    // Encontrar campos aunque vengan como "Codigo", "código", etc.
+  for(const r of rows){
     const keys = Object.keys(r||{});
     const byNorm = new Map(keys.map(k => [normalizeKey(k), k]));
 
@@ -146,21 +412,42 @@ function parseRowsToCatalog(rows){
     const kName  = byNorm.get("PRODUCTO") || byNorm.get("NOMBRE") || byNorm.get("DESCRIPCION") || byNorm.get("DESCRIPCIÓN");
     const kPrice = byNorm.get("PRECIO") || byNorm.get("PRICE") || byNorm.get("PVP");
     const kStock = byNorm.get("STOCK") || byNorm.get("EXISTENCIA") || byNorm.get("CANTIDAD");
+    const kCost  = byNorm.get("COSTO") || byNorm.get("COST");
+    const kCat   = byNorm.get("CATEGORIA") || byNorm.get("CATEGORÍA") || byNorm.get("CATEGORY");
 
     const code = kCode ? String(r[kCode]).trim() : "";
     const name = kName ? String(r[kName]).trim() : "";
     const price = kPrice ? Number(r[kPrice]) : NaN;
-    const stock = kStock ? Number(r[kStock]) : null;
 
-    if (!code || !name || !Number.isFinite(price)){
+    // STOCK puede venir vacío; si no es número, queda null (sin control de existencias)
+    const stockRaw = kStock ? r[kStock] : "";
+    const stockNum = Number(stockRaw);
+    const stock = Number.isFinite(stockNum) ? stockNum : null;
+
+    const costRaw = kCost ? r[kCost] : "";
+    const costNum = Number(costRaw);
+    const cost = Number.isFinite(costNum) ? costNum : null;
+
+    const category = kCat ? String(r[kCat]).trim() : "";
+
+    if(!code || !name || !Number.isFinite(price)){
       skipped++;
       continue;
     }
 
     const existing = catalog.get(code);
-    const item = { code, name, price, stock: Number.isFinite(stock) ? stock : null };
+    const item = {
+      code,
+      name,
+      price,
+      stock,      // null = no control
+      cost,
+      category
+    };
 
-    if (existing){
+    if(existing){
+      // Si en Excel no viene stock (null), respetamos el stock existente si ya lo tenía
+      if(item.stock === null && existing.stock !== null) item.stock = existing.stock;
       catalog.set(code, item);
       updated++;
     }else{
@@ -173,20 +460,18 @@ function parseRowsToCatalog(rows){
   return {added, updated, skipped};
 }
 
-document.getElementById("btnImport").addEventListener("click", async () => {
-  const fileInput = document.getElementById("file");
-  const msg = document.getElementById("importMsg");
+$("btnImport").addEventListener("click", async () => {
+  const fileInput = $("file");
+  const msg = $("importMsg");
   msg.textContent = "";
 
-  if (!fileInput.files || !fileInput.files[0]){
+  if(!fileInput.files || !fileInput.files[0]){
     msg.innerHTML = `<span class="bad">Selecciona un archivo Excel primero.</span>`;
     return;
   }
 
-  const file = fileInput.files[0];
-  const data = await file.arrayBuffer();
-
   try{
+    const data = await fileInput.files[0].arrayBuffer();
     const wb = XLSX.read(data, { type: "array" });
     const sheetName = wb.SheetNames[0];
     const ws = wb.Sheets[sheetName];
@@ -194,91 +479,157 @@ document.getElementById("btnImport").addEventListener("click", async () => {
 
     const r = parseRowsToCatalog(rows);
     msg.innerHTML = `<span class="ok">Importado.</span> Agregados: <b>${r.added}</b>, Actualizados: <b>${r.updated}</b>, Omitidos: <b>${r.skipped}</b>.`;
+
+    setPill(`Catálogo: ${catalog.size} productos`, true);
+    renderAll();
   }catch(e){
     msg.innerHTML = `<span class="bad">Error leyendo Excel:</span> ${e.message || e}`;
+    setPill("Error importando", false);
   }
 });
 
 /* =========================
-   Exportar CSV
+   Export CSV
 ========================= */
-document.getElementById("btnExport").addEventListener("click", () => {
+function downloadBlob(name, text, mime="text/csv;charset=utf-8"){
+  const blob = new Blob([text], {type:mime});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+$("btnExportProducts").addEventListener("click", () => {
   const arr = Array.from(catalog.values());
-  const header = ["CODIGO","PRODUCTO","PRECIO","STOCK"];
+  const header = ["CODIGO","PRODUCTO","PRECIO","STOCK","COSTO","CATEGORIA"];
   const lines = [header.join(",")];
 
-  for (const p of arr){
+  for(const p of arr){
     const line = [
       `"${String(p.code).replaceAll('"','""')}"`,
       `"${String(p.name).replaceAll('"','""')}"`,
       String(p.price),
-      p.stock == null ? "" : String(p.stock)
+      p.stock == null ? "" : String(p.stock),
+      p.cost == null ? "" : String(p.cost),
+      `"${String(p.category||"").replaceAll('"','""')}"`
     ].join(",");
     lines.push(line);
   }
+  downloadBlob("productos.csv", lines.join("\n"));
+});
 
-  const blob = new Blob([lines.join("\n")], {type:"text/csv;charset=utf-8"});
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = "productos.csv";
-  a.click();
-  URL.revokeObjectURL(a.href);
+$("btnExportSales").addEventListener("click", () => {
+  // Flatten: una fila por item vendido
+  const header = ["FECHA","VENTA_ID","METODO","CODIGO","PRODUCTO","PRECIO","CANTIDAD","TOTAL_LINEA","TOTAL_VENTA"];
+  const lines = [header.join(",")];
+
+  for(const s of sales){
+    for(const it of s.items){
+      const line = [
+        `"${s.dateTime}"`,
+        String(s.id),
+        `"${(s.payMethod||"")}"`,
+        `"${String(it.code).replaceAll('"','""')}"`,
+        `"${String(it.name).replaceAll('"','""')}"`,
+        String(it.price),
+        String(it.qty),
+        String(it.totalLine),
+        String(s.total)
+      ].join(",");
+      lines.push(line);
+    }
+  }
+  downloadBlob("ventas.csv", lines.join("\n"));
 });
 
 /* =========================
-   Borrar catálogo
+   Borrar todo
 ========================= */
-document.getElementById("btnClear").addEventListener("click", () => {
-  if (!confirm("¿Seguro que deseas borrar el catálogo guardado en este navegador?")) return;
-  localStorage.removeItem(LS_KEY);
+$("btnClearAll").addEventListener("click", () => {
+  if(!confirm("¿Seguro? Esto borra catálogo y ventas guardadas en este navegador.")) return;
+  localStorage.removeItem(LS_PRODUCTS);
+  localStorage.removeItem(LS_SALES);
+  localStorage.removeItem(LS_DAY);
+
   catalog = new Map();
-  updateCount();
-  document.getElementById("importMsg").innerHTML = `<span class="ok">Catálogo borrado.</span>`;
+  sales = [];
+  cart = [];
+  businessDay = todayStr();
+
+  saveBusinessDay();
+  setPill("Todo borrado", true);
+  $("importMsg").innerHTML = `<span class="ok">Listo.</span> Catálogo y ventas borradas.`;
+
+  renderAll();
 });
 
 /* =========================
-   Escaneo / Carrito
+   Carrito / Escaneo
 ========================= */
 function addToCart(code, qty){
-  const scanMsg = document.getElementById("scanMsg");
   const p = catalog.get(code);
+  const scanMsg = $("scanMsg");
 
-  if (!p){
-    scanMsg.innerHTML = `<span class="bad">No existe:</span> <span class="mono">${code}</span> (carga el Excel o agrega ese producto).`;
+  if(!p){
+    scanMsg.innerHTML = `<span class="bad">No existe:</span> <span class="mono">${code}</span> (importa el Excel).`;
     return;
   }
 
-  qty = Math.max(1, Number(qty||1));
-  const existing = cart.find(x => x.code === code);
-  if (existing) existing.qty += qty;
-  else cart.push({ code, name: p.name, price: p.price, qty });
+  qty = clampInt(qty, 1);
+
+  // Validar stock (solo si el producto controla stock)
+  if(p.stock !== null){
+    // calcular qty total en carrito para ese producto
+    const inCart = cart.find(x => x.code === code);
+    const currentQty = inCart ? inCart.qty : 0;
+    if(currentQty + qty > p.stock){
+      scanMsg.innerHTML = `<span class="bad">Stock insuficiente.</span> Disponible: <b>${p.stock}</b>, en carrito: <b>${currentQty}</b>.`;
+      return;
+    }
+  }
+
+  const line = cart.find(x => x.code === code);
+  if(line) line.qty += qty;
+  else cart.push({ code, qty });
 
   scanMsg.innerHTML = `<span class="ok">Agregado:</span> ${p.name} x${qty}`;
   renderCart();
 }
 
+function cartTotal(){
+  let total=0;
+  for(const it of cart){
+    const p = catalog.get(it.code);
+    if(!p) continue;
+    total += p.price * it.qty;
+  }
+  return total;
+}
+
 function renderCart(){
-  const tbody = document.querySelector("#cartTable tbody");
+  const tbody = $("cartTable").querySelector("tbody");
   tbody.innerHTML = "";
 
-  let total = 0;
-  for (const it of cart){
-    const lineTotal = it.price * it.qty;
-    total += lineTotal;
+  for(const it of cart){
+    const p = catalog.get(it.code);
+    if(!p) continue;
+
+    const lineTotal = p.price * it.qty;
 
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td class="mono">${it.code}</td>
-      <td>${it.name}</td>
-      <td>${money(it.price)}</td>
+      <td class="mono">${p.code}</td>
+      <td>${p.name}</td>
+      <td>${money(p.price)}</td>
       <td>${it.qty}</td>
       <td><b>${money(lineTotal)}</b></td>
-      <td><button class="secondary" data-del="${it.code}">Quitar</button></td>
+      <td><button class="btnGray" data-del="${p.code}">Quitar</button></td>
     `;
     tbody.appendChild(tr);
   }
 
-  document.getElementById("grandTotal").textContent = money(total);
+  $("grandTotal").textContent = money(cartTotal());
 
   tbody.querySelectorAll("button[data-del]").forEach(btn => {
     btn.addEventListener("click", () => {
@@ -289,30 +640,260 @@ function renderCart(){
   });
 }
 
-document.getElementById("btnEmpty").addEventListener("click", () => {
+$("btnEmpty").addEventListener("click", () => {
   cart = [];
   renderCart();
+  $("saleMsg").textContent = "";
 });
 
-document.getElementById("btnAdd").addEventListener("click", () => {
-  const code = document.getElementById("scan").value.trim();
-  if (!code) return;
-  addToCart(code, document.getElementById("qty").value);
-  document.getElementById("scan").value = "";
-  document.getElementById("scan").focus();
+$("btnAdd").addEventListener("click", () => {
+  const code = $("scan").value.trim();
+  if(!code) return;
+  addToCart(code, $("qty").value);
+  $("scan").value = "";
+  $("scan").focus();
 });
 
-// Pistola lectora: normalmente manda Enter
-document.getElementById("scan").addEventListener("keydown", (e) => {
-  if (e.key === "Enter"){
+$("scan").addEventListener("keydown", (e) => {
+  if(e.key === "Enter"){
     e.preventDefault();
     const code = e.target.value.trim();
-    if (!code) return;
-    addToCart(code, document.getElementById("qty").value);
+    if(!code) return;
+    addToCart(code, $("qty").value);
     e.target.value = "";
   }
 });
+
+/* =========================
+   Cobro (descuenta stock + guarda venta)
+========================= */
+function nextSaleId(){
+  // id incremental por día
+  const todaySales = getSalesOfDay(businessDay);
+  return todaySales.length + 1;
+}
+
+function getSalesOfDay(day){
+  return sales.filter(s => s.day === day);
+}
+
+function charge(){
+  const msg = $("saleMsg");
+  msg.textContent = "";
+
+  if(cart.length === 0){
+    msg.innerHTML = `<span class="bad">Carrito vacío.</span>`;
+    return;
+  }
+
+  // Validar existencias nuevamente (seguridad)
+  for(const it of cart){
+    const p = catalog.get(it.code);
+    if(!p){ msg.innerHTML = `<span class="bad">Producto faltante en catálogo:</span> ${it.code}`; return; }
+    if(p.stock !== null && it.qty > p.stock){
+      msg.innerHTML = `<span class="bad">Stock insuficiente:</span> ${p.name}. Disponible ${p.stock}.`;
+      return;
+    }
+  }
+
+  // Construir venta
+  const saleId = nextSaleId();
+  const date = new Date();
+  const dateTime = date.toLocaleString();
+  const payMethod = $("payMethod").value;
+  const received = $("received").value ? Number($("received").value) : null;
+
+  let total = 0;
+  const items = cart.map(it => {
+    const p = catalog.get(it.code);
+    const totalLine = p.price * it.qty;
+    total += totalLine;
+    return { code: p.code, name: p.name, price: p.price, qty: it.qty, totalLine };
+  });
+
+  // Descontar stock
+  for(const it of cart){
+    const p = catalog.get(it.code);
+    if(p.stock !== null){
+      p.stock = Number(p.stock) - it.qty;
+      if(p.stock < 0) p.stock = 0;
+      catalog.set(p.code, p);
+    }
+  }
+  saveCatalog();
+
+  // Guardar venta
+  const sale = {
+    id: saleId,
+    day: businessDay,
+    iso: new Date().toISOString(),
+    dateTime,
+    payMethod,
+    received,
+    total: Number(total.toFixed(2)),
+    items
+  };
+  sales.push(sale);
+  saveSales();
+
+  // Mensaje
+  let change = null;
+  if(received !== null && Number.isFinite(received)){
+    change = received - total;
+  }
+
+  // Alertas de stock
+  const min = Number($("minStock").value || 0);
+  const low = [];
+  const out = [];
+  for(const it of cart){
+    const p = catalog.get(it.code);
+    if(p && p.stock !== null){
+      if(p.stock <= 0) out.push(p.name);
+      else if(p.stock <= min) low.push(`${p.name} (${p.stock})`);
+    }
+  }
+
+  msg.innerHTML =
+    `<span class="ok">Venta realizada</span> — #${saleId}\n` +
+    `Total: ${money(total)}\n` +
+    `Método: ${payMethod}\n` +
+    (received !== null ? `Recibido: ${money(received)}\n` : "") +
+    (change !== null ? `Cambio: ${money(change)}\n` : "") +
+    (out.length ? `\n<span class="bad">Agotados:</span> ${out.join(", ")}\n` : "") +
+    (low.length ? `\n<span class="warn">Stock bajo:</span> ${low.join(", ")}\n` : "");
+
+  // Limpiar carrito
+  cart = [];
+  $("received").value = "";
+  renderAll();
+}
+
+$("btnCharge").addEventListener("click", charge);
+
+/* =========================
+   Corte X / Corte Z
+========================= */
+function totalsOfSales(arr){
+  const t = { EFECTIVO:0, TARJETA:0, TRANSFERENCIA:0, TOTAL:0, COUNT: arr.length };
+  for(const s of arr){
+    t.TOTAL += s.total;
+    if(s.payMethod && t[s.payMethod] !== undefined) t[s.payMethod] += s.total;
+  }
+  // redondeo
+  t.EFECTIVO = Number(t.EFECTIVO.toFixed(2));
+  t.TARJETA = Number(t.TARJETA.toFixed(2));
+  t.TRANSFERENCIA = Number(t.TRANSFERENCIA.toFixed(2));
+  t.TOTAL = Number(t.TOTAL.toFixed(2));
+  return t;
+}
+
+$("btnCorteX").addEventListener("click", () => {
+  const daySales = getSalesOfDay(businessDay);
+  const t = totalsOfSales(daySales);
+  $("saleMsg").textContent =
+    `CORTE X — ${businessDay}\n` +
+    `Ventas: ${t.COUNT}\n` +
+    `EFECTIVO: ${money(t.EFECTIVO)}\n` +
+    `TARJETA: ${money(t.TARJETA)}\n` +
+    `TRANSFERENCIA: ${money(t.TRANSFERENCIA)}\n` +
+    `TOTAL: ${money(t.TOTAL)}`;
+});
+
+$("btnCorteZ").addEventListener("click", () => {
+  const daySales = getSalesOfDay(businessDay);
+  const t = totalsOfSales(daySales);
+
+  if(!confirm(`¿Hacer CORTE Z?\nSe cerrará el día ${businessDay}.\nVentas: ${t.COUNT} — Total: ${money(t.TOTAL)}`)) return;
+
+  // Guardamos “cierre” como una venta especial en ventas (opcional), aquí lo dejamos en mensaje
+  $("saleMsg").textContent =
+    `CORTE Z — CIERRE\n` +
+    `Día: ${businessDay}\n` +
+    `Ventas: ${t.COUNT}\n` +
+    `EFECTIVO: ${money(t.EFECTIVO)}\n` +
+    `TARJETA: ${money(t.TARJETA)}\n` +
+    `TRANSFERENCIA: ${money(t.TRANSFERENCIA)}\n` +
+    `TOTAL: ${money(t.TOTAL)}\n\n` +
+    `✅ Día cerrado.`;
+
+  // Nuevo día (no borra historial)
+  businessDay = todayStr();
+  saveBusinessDay();
+  renderKPIs();
+});
+
+/* =========================
+   Inventario (render + búsqueda)
+========================= */
+function productStatus(p, min){
+  if(p.stock === null) return { text:"Sin control", cls:"muted" };
+  if(p.stock <= 0) return { text:"Agotado", cls:"bad" };
+  if(p.stock <= min) return { text:"Bajo", cls:"warn" };
+  return { text:"OK", cls:"ok" };
+}
+
+function renderInventory(){
+  const tbody = $("invTable").querySelector("tbody");
+  tbody.innerHTML = "";
+
+  const q = $("search").value.trim().toLowerCase();
+  const min = Number($("minStock").value || 0);
+
+  const arr = Array.from(catalog.values()).sort((a,b)=> a.name.localeCompare(b.name));
+  const filtered = q
+    ? arr.filter(p => p.code.toLowerCase().includes(q) || p.name.toLowerCase().includes(q))
+    : arr;
+
+  for(const p of filtered){
+    const st = productStatus(p, min);
+    const stockText = (p.stock === null) ? "-" : String(p.stock);
+
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td class="mono">${p.code}</td>
+      <td>${p.name}</td>
+      <td>${money(p.price)}</td>
+      <td>${stockText}</td>
+      <td><span class="${st.cls}">${st.text}</span></td>
+    `;
+    tbody.appendChild(tr);
+  }
+}
+
+$("search").addEventListener("input", renderInventory);
+$("btnClearSearch").addEventListener("click", () => {
+  $("search").value = "";
+  renderInventory();
+});
+$("minStock").addEventListener("input", renderInventory);
+
+/* =========================
+   KPIs
+========================= */
+function renderKPIs(){
+  $("businessDay").textContent = businessDay;
+  const daySales = getSalesOfDay(businessDay);
+  const t = totalsOfSales(daySales);
+
+  $("kpiSalesCount").textContent = String(t.COUNT);
+  $("kpiTotalToday").textContent = money(t.TOTAL);
+  $("kpiProducts").textContent = String(catalog.size);
+}
+
+/* =========================
+   Render All
+========================= */
+function renderAll(){
+  renderCart();
+  renderInventory();
+  renderKPIs();
+  setPill(`Catálogo: ${catalog.size} productos`, true);
+}
+
+renderAll();
 </script>
 
 </body>
 </html>
+
